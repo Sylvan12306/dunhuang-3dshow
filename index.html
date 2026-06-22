@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>敦煌 3DShow 数字展馆</title>
+  <!-- 预加载模型文件：浏览器在解析 HTML 时立即开始下载，不等待 JS 执行 -->
+  <link rel="preload" href="/models/dunhuang_museum.glb" as="fetch" crossorigin fetchpriority="high" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #1a1410; font-family: "Microsoft YaHei", "SimSun", sans-serif; }
+    #app { width: 100vw; height: 100vh; position: relative; }
+    canvas { display: block; }
+
+    /* === 敦煌矿物色彩体系 === */
+    /* 石青 #4A7C8C | 石绿 #5B8C6A | 朱砂 #C44536 | 土黄 #C4A668 | 赭石 #8B5A3C */
+
+    /* 加载界面 - 复古敦煌中式设计 */
+    #loading {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(ellipse at center, #2a1e14 0%, #1a1410 100%);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 100;
+      color: #c4a668; transition: opacity 0.8s;
+    }
+    #loading h1 {
+      font-size: 32px; margin-bottom: 8px; letter-spacing: 6px;
+      color: #c4a668; text-shadow: 0 0 20px rgba(196, 166, 104, 0.4);
+    }
+    #loading .subtitle { font-size: 14px; color: #8a7a5a; margin-bottom: 30px; letter-spacing: 2px; }
+    #loading-bar-wrap {
+      width: 400px; height: 4px; background: #2a2218; border-radius: 2px; overflow: hidden;
+      border: 1px solid #3a2e1e;
+    }
+    #loading-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #8B5A3C, #c4a668); transition: width 0.3s; }
+    #loading-text { margin-top: 12px; font-size: 13px; color: #8a7a5a; }
+
+    /* 顶部导航栏 - 烫金复古设计 */
+    #top-bar {
+      position: fixed; top: 0; left: 0; width: 100%; height: 56px;
+      background: linear-gradient(180deg, rgba(26, 20, 16, 0.92), rgba(26, 20, 16, 0.85));
+      backdrop-filter: blur(10px);
+      display: flex; align-items: center; padding: 0 24px; z-index: 40;
+      border-bottom: 1px solid #5a4a32;
+      box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+    }
+    #top-bar .title {
+      color: #c4a668; font-size: 20px; letter-spacing: 3px;
+      text-shadow: 0 0 10px rgba(196, 166, 104, 0.3);
+      border-right: 1px solid #4a3a22; padding-right: 20px;
+    }
+    #top-bar .nav-btns { margin-left: auto; display: flex; gap: 8px; }
+    #top-bar button {
+      background: rgba(42, 34, 24, 0.8); border: 1px solid #4a3a22; color: #c4a668;
+      padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;
+      transition: all 0.3s; letter-spacing: 1px;
+    }
+    #top-bar button:hover {
+      background: rgba(74, 58, 34, 0.8); border-color: #c4a668;
+      box-shadow: 0 0 10px rgba(196, 166, 104, 0.2);
+    }
+    #top-bar button.active {
+      background: rgba(196, 166, 104, 0.15); border-color: #c4a668;
+      color: #ffe0a0;
+    }
+
+    /* 信息弹窗 - 深色烫金文字设计 */
+    #info-panel {
+      position: fixed; top: 50%; right: 30px; transform: translateY(-50%);
+      width: 400px; max-height: 70vh; overflow-y: auto;
+      background: linear-gradient(135deg, rgba(26, 20, 16, 0.95), rgba(42, 30, 20, 0.95));
+      border: 1px solid #5a4a32; border-radius: 8px; padding: 28px;
+      color: #d4c4a8; display: none; z-index: 50;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(196, 166, 104, 0.1);
+    }
+    #info-panel::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent, #c4a668, transparent);
+      border-radius: 8px 8px 0 0;
+    }
+    #info-panel h2 {
+      color: #c4a668; font-size: 22px; margin-bottom: 14px;
+      border-bottom: 1px solid #4a3a22; padding-bottom: 10px;
+      letter-spacing: 2px; text-shadow: 0 0 8px rgba(196, 166, 104, 0.2);
+    }
+    #info-panel .dynasty-tag {
+      display: inline-block; background: rgba(196, 69, 54, 0.2);
+      border: 1px solid #C44536; color: #e87060;
+      padding: 2px 10px; border-radius: 3px; font-size: 12px; margin-bottom: 12px;
+    }
+    #info-panel p { font-size: 14px; line-height: 1.9; margin-bottom: 8px; color: #c4b498; }
+    #info-panel .close-btn {
+      position: absolute; top: 14px; right: 18px; cursor: pointer;
+      color: #8a7a5a; font-size: 22px; transition: color 0.2s;
+    }
+    #info-panel .close-btn:hover { color: #c4a668; }
+
+    /* 底部操作提示 */
+    #bottom-hint {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(26, 20, 16, 0.85); color: #8a7a5a;
+      padding: 8px 24px; border-radius: 20px; font-size: 12px; z-index: 40;
+      backdrop-filter: blur(6px); border: 1px solid #3a2e1e;
+      letter-spacing: 1px;
+    }
+
+    /* === 缩略导览地图 === */
+    #minimap {
+      position: fixed; bottom: 20px; right: 20px; width: 240px; height: 120px;
+      background: rgba(26, 20, 16, 0.9); border: 1px solid #5a4a32;
+      border-radius: 8px; z-index: 40; backdrop-filter: blur(8px);
+      overflow: hidden; display: none;
+    }
+    #minimap .map-title {
+      position: absolute; top: 4px; left: 8px; font-size: 11px;
+      color: #c4a668; z-index: 2; letter-spacing: 1px;
+    }
+    #minimap canvas { width: 100%; height: 100%; }
+    #minimap .map-hint {
+      position: absolute; bottom: 4px; left: 8px; font-size: 10px;
+      color: #6a5a3a; z-index: 2;
+    }
+
+    /* === 洞窟导航按钮（悬浮在 3D 场景上方）=== */
+    #cave-nav {
+      position: fixed; left: 20px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 8px; z-index: 40;
+    }
+    #cave-nav .cave-btn {
+      background: rgba(26, 20, 16, 0.85); border: 1px solid #4a3a22;
+      color: #c4a668; padding: 10px 16px; border-radius: 6px;
+      cursor: pointer; font-size: 13px; transition: all 0.3s;
+      backdrop-filter: blur(6px); text-align: center; min-width: 120px;
+      letter-spacing: 1px;
+    }
+    #cave-nav .cave-btn:hover {
+      background: rgba(74, 58, 34, 0.8); border-color: #c4a668;
+      box-shadow: 0 0 15px rgba(196, 166, 104, 0.3);
+      transform: translateX(4px);
+    }
+    #cave-nav .cave-btn.active {
+      background: rgba(196, 166, 104, 0.15); border-color: #c4a668;
+      color: #ffe0a0;
+      box-shadow: 0 0 20px rgba(196, 166, 104, 0.4);
+    }
+    #cave-nav .cave-btn .cave-dynasty {
+      display: block; font-size: 10px; color: #8a7a5a; margin-top: 2px;
+    }
+
+    /* === 导览指引弹窗 === */
+    #guide-modal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7); z-index: 200; display: none;
+      align-items: center; justify-content: center; backdrop-filter: blur(4px);
+    }
+    #guide-modal .modal-content {
+      background: linear-gradient(135deg, rgba(26, 20, 16, 0.98), rgba(42, 30, 20, 0.98));
+      border: 1px solid #5a4a32; border-radius: 12px; padding: 36px;
+      width: 520px; max-height: 80vh; overflow-y: auto;
+      box-shadow: 0 12px 60px rgba(0, 0, 0, 0.6), 0 0 30px rgba(196, 166, 104, 0.1);
+    }
+    #guide-modal h2 {
+      color: #c4a668; font-size: 24px; margin-bottom: 20px;
+      text-align: center; letter-spacing: 3px;
+      border-bottom: 1px solid #4a3a22; padding-bottom: 12px;
+    }
+    #guide-modal .guide-section { margin-bottom: 18px; }
+    #guide-modal .guide-section h3 {
+      color: #c4a668; font-size: 15px; margin-bottom: 8px; letter-spacing: 1px;
+    }
+    #guide-modal .guide-section p {
+      color: #c4b498; font-size: 13px; line-height: 1.8; padding-left: 12px;
+      border-left: 2px solid #4a3a22;
+    }
+    #guide-modal .key-badge {
+      display: inline-block; background: rgba(196, 166, 104, 0.15);
+      border: 1px solid #5a4a32; color: #c4a668;
+      padding: 1px 8px; border-radius: 3px; font-size: 12px; margin: 0 2px;
+    }
+    #guide-modal .close-guide {
+      display: block; margin: 20px auto 0; background: rgba(196, 166, 104, 0.15);
+      border: 1px solid #c4a668; color: #c4a668; padding: 8px 32px;
+      border-radius: 4px; cursor: pointer; font-size: 14px; letter-spacing: 2px;
+    }
+    #guide-modal .close-guide:hover { background: rgba(196, 166, 104, 0.25); }
+
+  </style>
+  <script type="module" crossorigin src="/assets/index-DLWRZCQR.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/three-vendor-Dx0eHgkH.js">
+</head>
+<body>
+  <div id="app">
+    <!-- 加载界面 -->
+    <div id="loading">
+      <h1>敦煌 3DShow</h1>
+      <div class="subtitle">数字洞窟沉浸式漫游</div>
+      <div id="loading-bar-wrap">
+        <div id="loading-bar"></div>
+      </div>
+      <div id="loading-text">正在加载洞窟模型资源...</div>
+    </div>
+
+    <!-- 顶部导航栏 -->
+    <div id="top-bar" style="display:none;">
+      <span class="title">敦煌 3DShow</span>
+      <div class="nav-btns">
+        <button id="btn-guide" title="导览指引">导览</button>
+        <button id="btn-minimap" title="导览地图">地图</button>
+        <button id="btn-fullscreen" title="全屏">全屏</button>
+      </div>
+    </div>
+
+    <!-- 洞窟导航按钮 -->
+    <div id="cave-nav" style="display:none;">
+      <div class="cave-btn" data-cave="285">285窟<span class="cave-dynasty">西魏</span></div>
+      <div class="cave-btn" data-cave="45">45窟<span class="cave-dynasty">盛唐</span></div>
+      <div class="cave-btn" data-cave="217">217窟<span class="cave-dynasty">盛唐</span></div>
+      <div class="cave-btn" data-cave="17">17窟<span class="cave-dynasty">晚唐</span></div>
+      <div class="cave-btn" data-cave="3">3窟<span class="cave-dynasty">元代</span></div>
+    </div>
+
+    <!-- 缩略导览地图 -->
+    <div id="minimap" style="display:none;">
+      <div class="map-title">展馆导览图</div>
+      <canvas id="minimap-canvas" width="240" height="120"></canvas>
+      <div class="map-hint">点击洞窟跳转</div>
+    </div>
+
+    <!-- 信息弹窗 -->
+    <div id="info-panel">
+      <span class="close-btn" onclick="document.getElementById('info-panel').style.display='none'">&times;</span>
+      <h2 id="info-title"></h2>
+      <div id="info-dynasty"></div>
+      <div id="info-content"></div>
+    </div>
+
+    <!-- 导览指引弹窗 -->
+    <div id="guide-modal">
+      <div class="modal-content">
+        <h2>导览指引</h2>
+        <div class="guide-section">
+          <h3>视角操作</h3>
+          <p>
+            <span class="key-badge">鼠标左键</span> 旋转视角 |
+            <span class="key-badge">滚轮</span> 缩放距离 |
+            <span class="key-badge">Shift+滚轮</span> 多维环绕观赏 |
+            <span class="key-badge">右键拖拽</span> 平移视角
+          </p>
+        </div>
+        <div class="guide-section">
+          <h3>自由漫游</h3>
+          <p>
+            <span class="key-badge">W</span> 前进 |
+            <span class="key-badge">S</span> 后退 |
+            <span class="key-badge">A</span> 左移 |
+            <span class="key-badge">D</span> 右移 |
+            <span class="key-badge">Q/E</span> 上升/下降
+          </p>
+          <p>进入洞窟后可 360 度环绕观赏前、后、左、右、窟顶五重视觉画面</p>
+        </div>
+        <div class="guide-section">
+          <h3>洞窟导航</h3>
+          <p>点击左侧洞窟按钮可一键飞至对应洞窟，每间洞窟入口有高亮发光提示</p>
+        </div>
+        <div class="guide-section">
+          <h3>展品交互</h3>
+          <p>点击壁画或彩塑，弹出文物解说弹窗，展示历史背景与文化内涵</p>
+        </div>
+        <button class="close-guide" onclick="document.getElementById('guide-modal').style.display='none'">开始游览</button>
+      </div>
+    </div>
+
+    <!-- 底部操作提示 -->
+    <div id="bottom-hint" style="display:none;">
+      左键旋转 | 滚轮缩放 | Shift+滚轮多维环绕 | 右键平移 | WASD 漫游 | 点击展品查看详情
+    </div>
+
+  </div>
+  <!-- Service Worker 注册：缓存模型文件，二次访问秒开 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').then(function(reg) {
+          console.log('[SW] Service Worker 注册成功，作用域: ', reg.scope);
+        }).catch(function(err) {
+          console.warn('[SW] Service Worker 注册失败: ', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
