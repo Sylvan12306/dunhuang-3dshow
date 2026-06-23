@@ -13,8 +13,8 @@ const PRECACHE_URLS = [
   '/index.html',
 ]
 
-// 模型文件路径（大文件，优先从缓存加载）
-const MODEL_PATH = '/models/dunhuang_museum.glb'
+// 模型文件 CDN 地址（从 GitHub Release 加载，避免 LFS 指针问题）
+const MODEL_URL = 'https://github.com/Suxinyan12306/dunhuang-3dshow/releases/download/v1.0/dunhuang_museum.glb'
 
 // 安装事件：预缓存关键资源
 self.addEventListener('install', (event) => {
@@ -52,7 +52,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
-  // 模型文件：Cache First 策略（优先从缓存读取，缓存未命中再请求网络）
+  // 模型文件（CDN）：Cache First 策略（优先从缓存读取，缓存未命中再请求网络）
+  if (url.hostname === 'github.com' && url.pathname.includes('/releases/download/')) {
+    event.respondWith(cacheFirst(event.request))
+    return
+  }
+
+  // 模型文件（本地）：Cache First 策略
   if (url.pathname.endsWith('.glb') || url.pathname.endsWith('.gltf')) {
     event.respondWith(cacheFirst(event.request))
     return
