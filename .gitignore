@@ -1,0 +1,6 @@
+node_modules/
+dist/
+blender/*.blend1
+public/models/*.glb.br
+public/models/*.glb.gz
+scripts/
