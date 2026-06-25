@@ -6,7 +6,7 @@
  */
 
 // 缓存版本号（更新资源时修改此版本号）
-const CACHE_NAME = 'dunhuang-3dshow-v3'
+const CACHE_NAME = 'dunhuang-3dshow-v4'
 
 // 获取基础路径（适配 GitHub Pages 子路径部署）
 // 通过 self.registration.scope 获取作用域，提取相对路径
