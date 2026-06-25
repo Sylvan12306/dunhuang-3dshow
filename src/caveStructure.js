@@ -116,7 +116,6 @@ export function buildCaveStructure(scene) {
   CAVE_POSITIONS.forEach((cave, index) => {
     buildSingleCave(caveGroup, cave, index, {
       wallMaterial,
-      leftWallMaterial,
       floorMaterial,
       ceilingMaterial,
       frameMaterial,
